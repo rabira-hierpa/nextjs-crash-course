@@ -1,8 +1,27 @@
-import Head from 'next/head'
-import Image from 'next/image'
-import styles from '../styles/Home.module.css'
+import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
+import Head from "next/head";
+import Image from "next/image";
+import NavBar from "../components/Navbar/Navbar";
+import styles from "../styles/Home.module.css";
+import { useState } from "react";
+import {
+  Heading,
+  Box,
+  Flex,
+  Input,
+  Stack,
+  IconButton,
+  useToast,
+} from "@chakra-ui/react";
+import { SearchIcon, CloseIcon } from "@chakra-ui/icons";
+import Characters from "../components/Characters/Characters";
 
-export default function Home() {
+export default function Home(results) {
+  const initialState = results;
+  const [characters, setCharacters] = useState(initialState.characters);
+  const [search, setSearch] = useState("");
+  const toast = useToast();
+
   return (
     <div className={styles.container}>
       <Head>
@@ -11,46 +30,68 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className={styles.card}
+      <Flex direction="column" align="center" justify="center">
+        <Box
+          mb={4}
+          flexDirection="column"
+          align="center"
+          justify="center"
+          py={8}
+        >
+          <Heading as="h1" size="2xl" mb={8}>
+            Rick and Morty
+          </Heading>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const results = await fetch("/api/SearchCharacters", {
+                method: "post",
+                body: search,
+              });
+              const { characters, error } = await results.json();
+              if (error) {
+                toast({
+                  position: "bottom",
+                  title: "Unable to serve your request",
+                  description: error,
+                  status: "error",
+                  duration: 5000,
+                  isClosable: true,
+                });
+              }else{
+                setCharacters(characters);
+              }
+            }}
           >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
+            <Stack maxWidth="350px" width="100%" isInline mb={8}>
+              <Input
+                placeholder="Search"
+                value={search}
+                border="none"
+                onChange={(e) => setSearch(e.target.value)}
+              ></Input>
+              <IconButton
+                colorScheme="blue"
+                aria-label="Search database"
+                icon={<SearchIcon />}
+                disabled={search === ""}
+                type="submit"
+              />
+              <IconButton
+                colorScheme="red"
+                aria-label="Reset "
+                icon={<CloseIcon />}
+                disabled={search === ""}
+                onClick={async () => {
+                  setSearch("");
+                  setCharacters(initialState.characters);
+                }}
+              />
+            </Stack>
+          </form>
+          <Characters characters={characters} />
+        </Box>
+      </Flex>
 
       <footer className={styles.footer}>
         <a
@@ -58,12 +99,56 @@ export default function Home() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Powered by{' '}
+          Powered by{" "}
           <span className={styles.logo}>
             <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
           </span>
         </a>
       </footer>
     </div>
-  )
+  );
+}
+
+export async function getStaticProps() {
+  const client = new ApolloClient({
+    uri: "https://rickandmortyapi.com/graphql/",
+    cache: new InMemoryCache(),
+  });
+
+  const { data } = await client.query({
+    query: gql`
+      query {
+        characters(page: 1) {
+          info {
+            count
+            pages
+          }
+          results {
+            id
+            name
+            location {
+              id
+              name
+            }
+            origin {
+              id
+              name
+            }
+            episode {
+              id
+              episode
+              air_date
+            }
+            image
+          }
+        }
+      }
+    `,
+  });
+
+  return {
+    props: {
+      characters: data.characters.results,
+    },
+  };
 }
